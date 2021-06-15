@@ -1,10 +1,13 @@
+# value-operator
+value operator tools.
 
-var assert = require("assert");
+## install
 
-var value_operator = require("../value-operator.js");
+`npm install value-operator`
 
-describe('value-operator', function () {
+## usage examples
 
+```
 	it('transferValue', function () {
 		assert( value_operator( "100", ["int",[">",50]]) === 100 );
 		assert( value_operator( "100", ["int",["<",50]]) instanceof Error );
@@ -13,11 +16,11 @@ describe('value-operator', function () {
 	});
 
 	it('transferValue, break', function () {
-		assert( value_operator.transferValue( "a",	["toNull", "isNull:$", ["+","."]] ) === "a." );
-		assert( value_operator.transferValue( "",	["toNull", "isNull:$", ["+","."]] ) === null );
+		assert( value_operator( "a",	["toNull", "isNull:$", ["+","."]] ) === "a." );
+		assert( value_operator( "",	["toNull", "isNull:$", ["+","."]] ) === null );
 		
-		assert( value_operator.transferValue( "a",	["toNull", "isNull:$1", ["+:$","."],["=","default"]] ) === "a." );
-		assert( value_operator.transferValue( "",	["toNull", "isNull:$1", ["+:$","."],["=","default"]] ) === "default" );
+		assert( value_operator( "a",	["toNull", "isNull:$1", ["+:$","."],["=","default"]] ) === "a." );
+		assert( value_operator( "",	["toNull", "isNull:$1", ["+:$","."],["=","default"]] ) === "default" );
 	});
 
 	it('transferValue, user-defined-operator', function () {
@@ -46,5 +49,4 @@ describe('value-operator', function () {
 		assert( rsl.a === "a." );
 		assert( rsl.b === "default" );
 	});
-	
-});
+```
