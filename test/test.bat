@@ -1,0 +1,2 @@
+call mocha
+rem pause
