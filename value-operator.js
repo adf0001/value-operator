@@ -6,13 +6,15 @@
 * Operator call-array item format
 
 	format a:
-		function	=>	my_operator( v ) { ... }, a user-defined operator function, that return transfered value, or return `undefined` or Error object if fail.
+		function	=>	my_operator( v ) { ... }, a user-defined operator function, that return success (transfered value), or return fail ( `undefined` or an Error object ).
 			my_operator(v)
 
 	format b:
 		"string"	=>	"operator_name"
 			operatorSet["operator_name"]( v )
-
+		
+		":string"	=>	a user-defined label, does nothing; characters set of the `string` part is [a-zA-Z0-9_].
+		
 	format c:
 		[ "operator_name" / my_operator, [ arg1, ... ]/arg1 ]	=>	operator with arguments
 			operatorSet["operator_name"]( v, arg1, ... ), or
@@ -29,21 +31,44 @@
 		regExp		=>	myRegExp,	a user-defined regExp object.
 			defaultOperatorSet["match"]( v, myRegExp )
 
-* Operator call-array break command format
+* Jump-command
 
-	A break command is defined as a string `":$"` or `":$n"` at the end of "operator_name".
-
-		when the operator return not-`undefined` value,
-			command `":$"` break the process and return.
-			command `":$n"` skip `n` steps.
-
-		when the operator return `undefined` or Error,
-			process the next with last not-`undefined` value.
-
+	A jump-command is defined as a string started with ":", and appended to a call-array item's name, ex. "toInteger:myCommand".
+	
+	Command format
+		
+		":" + [<condition>] + [<direction>] + <label>
+		
+		<condition>
+			empty
+						when call-array item success, jump to the label;
+						when fail, process the next with previous success value;
+						
+			"!"
+						when success, process the next;
+						when fail, jump to the label with previous success value;
+		
+		<direction>
+			empty		search the label forward then backward
+			"+"			search the label forward
+			"-"			search the label backward
+		
+		<label>
+			"<label>"	a user-defined label
+			
+			"last"		last item of call-array, label "last" can be overrided by user;
+			"first"		first item of call-array, label "first" can be overrided by user;
+			
+			"$"			do not jump, but return the jumping value, or continue processing the next, refer <condition>;
+			
+			"$$"		stop the process, return current success or fail value;
+			"$$-"		stop the process, return current success value, or previous success value if current value is fail;
 */
 
 /////////////////////////////////////////////////
 // default operator set
+
+// NOTE for debug: object `defaultOperatorSet` has a methed `toString()`, so `""+defaultOperatorSet` will return string "undefined".
 
 var defaultOperatorSet = {
 
@@ -55,6 +80,8 @@ var defaultOperatorSet = {
 
 	"undefined": function () { },
 	"value": function (v, newValue) { return newValue; },
+	
+	"void": function (v) { return v; },
 
 	/********************** unary ***********************/
 
@@ -185,7 +212,31 @@ for (var i in shortcut) { defaultOperatorSet[i] = defaultOperatorSet[shortcut[i]
 /////////////////////////////////////////////////
 // value operator
 
-var LOOP_MAX= 100;
+var STEP_MAX= 100;
+
+//return new index, or `undefined`
+function findLabel( operatorArray, index, direction, label ){
+	label=":"+label;
+	
+	var i;
+	if( direction!="-" ){
+		var imax=operatorArray.length;
+		for(i=index+1;i<imax;i++){
+			if( operatorArray[i]==label ) return i;
+		}
+	}
+	
+	if( direction!="+" ){
+		for(i=index-1;i>=0;i--){
+			if( operatorArray[i]==label ) return i;
+		}
+	}
+	
+	if( label===":last" ) return operatorArray.length-1;
+	if( label===":first" ) return 0;
+}
+
+var regJumpCommand= /\:([\!]?)([\+\-]?)(\$|\$\$\-?|\w+)$/;
 
 /*
 function transferValue( v, operatorArray [, operatorSet [, replaceMode]] )
@@ -200,18 +251,21 @@ function transferValue( v, operatorArray, operatorSet, replaceMode ) {
 		operatorSet= Object.assign( Object.create(defaultOperatorSet), operatorSet );
 	}
 
-	var i, imax = operatorArray.length, op, typeName, newV, opi, thisObject, arg, mBreak,n,loop=0;
+	var i, imax = operatorArray.length, op, typeName, newV, opi, thisObject, arg, mrCmd,n,step=0, isFail;
 	try{
 		for (i = 0; i < imax; i++) {
 
-			mBreak = null;
+			mrCmd = null;
 
 			op = operatorArray[i];
 			typeName = typeof op;
 
 			if (typeName === "string") {
-				mBreak = op.match(/\:\$\d*$/);
-				opi = (mBreak) ? op.slice(0, -mBreak[0].length) : op;
+				
+				if( op.match( /^\:\w+$/ ) ) continue;	//a label
+				
+				mrCmd = op.match(regJumpCommand);
+				opi = (mrCmd) ? op.slice(0, -mrCmd[0].length) : op;
 				if (!(opi in operatorSet)) { return Error("operator item unfound, idx " + i + ", " + op); }
 				newV = operatorSet[opi](v);
 			}
@@ -229,6 +283,7 @@ function transferValue( v, operatorArray, operatorSet, replaceMode ) {
 						break;
 					case 2:		//format c
 						op.unshift((typeof op[0] === "string") ? operatorSet : null);
+						//continue next `case 3`
 					case 3:		//format d
 						if (op[2] instanceof Array) {
 							op[2].unshift(null);
@@ -250,8 +305,8 @@ function transferValue( v, operatorArray, operatorSet, replaceMode ) {
 				typeName = typeof opi;
 
 				if (typeName === "string") {
-					mBreak = opi.match(/\:\$\d*$/);
-					if (mBreak) opi = opi.slice(0, -mBreak[0].length);
+					mrCmd = opi.match(regJumpCommand);
+					if (mrCmd) opi = opi.slice(0, -mrCmd[0].length);
 					if (!(opi in thisObject)) { return Error("operator item unfound, idx " + i + ", " + op); }
 					arg[0] = v;
 					newV = thisObject[opi].apply(thisObject, arg);
@@ -265,27 +320,34 @@ function transferValue( v, operatorArray, operatorSet, replaceMode ) {
 			else { return Error("unknown operator item type, idx " + i + ", " + op); }
 
 			//check value
-			if( (typeof newV === "undefined") || ( newV instanceof Error ) ) {
-				if (!mBreak) {
-					return Error("operator item process error, idx " + i + ", " + op);
-				}
-			}
-			else {
-				if (mBreak) {
-					if (mBreak[0].length === 2) return newV;
-					else {
-						n=parseInt(mBreak[0].slice(2));
-						//console.log( mBreak[0], n );
-						if( !n && n!==0 ) return Error("operator item break cmd error, idx " + i + ", " + op);
-						i += n;
+			
+			isFail= (typeof newV === "undefined") || ( newV instanceof Error );
+			//console.log( "isFail= " + isFail, isFail && newV);
+			
+			if( mrCmd ){
+				//special <label>
+				if( mrCmd[3]==="$$" ) { return isFail?( newV || Error("operator item process error, idx " + i + ", " + op) ): newV; }
+				if( mrCmd[3]==="$$-" ) { return isFail? v: newV; }
+				
+				if( (mrCmd[1]=="!" && isFail) || (mrCmd[1]!="!" && !isFail) ){
+					if( mrCmd[3]==="$" ){
+						return isFail? v: newV;
 					}
+					
+					i= findLabel( operatorArray, i, mrCmd[2], mrCmd[3] );
+					if(  typeof i === "undefined" ){ return Error("label unfound, "+ mrCmd[3] +",idx " + i + ", " + op); }
+					i--;	//for next loop i++
 				}
-
+				if( !isFail ) v= newV;
+			}
+			else{
+				if( isFail ){ return newV || Error("operator item process error, idx " + i + ", " + op); }
+				
 				v = newV;
 			}
 			
-			loop++;
-			if( loop > LOOP_MAX ) return Error("operator loop>"+LOOP_MAX+", idx " + i + ", " + op);
+			step++;
+			if( step > STEP_MAX ){ return Error("operator steps more than "+STEP_MAX+", idx " + i + ", " + op); }
 		}
 		return v;
 	}

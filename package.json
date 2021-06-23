@@ -1,6 +1,6 @@
 {
   "name": "value-operator",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "value-operator.js",
   "scripts": {
