@@ -73,6 +73,26 @@ describe('value-operator', function () {
 		assert( rsl.a === "a." );
 		assert( rsl.b === "default" );
 	});
+
+	it('transferObject / default', function () {
+		var rsl= value_operator.transferObject( {}, {a:"a"},
+			{
+				a: ["toNull", "isNull:$", ["+","."]],
+				b: ["toNull", "isNull:1", ["+:$","."],":1",["=","default"]],
+			}
+		);
+		assert( rsl instanceof Error );
+		console.log("["+rsl.message+"]");
+		
+		var rsl= value_operator.transferObject( {}, {a:"a"},
+			{
+				a: ["toNull", "isNull:$", ["+","."]],
+				"b?": ["toNull", "isNull:1", ["+:$","."],":1",["=","default"]],
+			}
+		);
+		assert( rsl.a === "a." );
+		assert( rsl.b === "default" );
+	});
 	/*
 	*/
 });

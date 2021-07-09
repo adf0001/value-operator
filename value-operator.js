@@ -373,16 +373,31 @@ function transferArray(destArray, srcArray, operatorArray, operatorSet, replaceM
 	return destArray;
 }
 
-//function transferObject(destObject, srcObject, operatorArrayMapping [, skipUnfound [, operatorSet [, replaceMode ]]] )
+/*
+function transferObject(destObject, srcObject, operatorArrayMapping [, skipUnfound [, operatorSet [, replaceMode ]]] )
+
+	operatorArrayMapping:
+		the mapping name:
+			varName + ["?"] + [":array"]
+				
+				"?"
+					try get default from call-array, event if varName unfound in `srcObject`;
+				
+				":array"
+					call the transferArray()
+*/
 function transferObject(destObject, srcObject, operatorArrayMapping, skipUnfound, operatorSet, replaceMode) {
-	var i, imax, oi, v, nm, isArray;
+	var i, imax, oi, v, nm, isArray, hasDefault;
 	for (i in operatorArrayMapping) {
 		
 		nm= i;
 		isArray= (nm.slice(-6)==":array");
 		if(isArray) nm=nm.slice(0,-6);
 		
-		if (nm in srcObject) {
+		hasDefault= nm.charAt(nm.length-1)==="?";
+		if( hasDefault ) nm=nm.slice(0,-1);
+		
+		if (nm in srcObject || hasDefault ) {
 			v = isArray ? transferArray([], srcObject[nm], operatorArrayMapping[i] ) : transferValue(srcObject[nm], operatorArrayMapping[i]);
 			if( v instanceof Error ){
 				return Error( "transferObject fail at i=" + i +", " + (v.message || ((isArray?"transferValue":"transferValue")+" fail")) );
